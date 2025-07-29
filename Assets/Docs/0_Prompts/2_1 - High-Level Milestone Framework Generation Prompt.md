@@ -117,6 +117,7 @@ Analyze the provided GDD and TDS to create a focused development roadmap using p
 - Emphasize clear milestone definitions over complex planning
 - Focus on what players can experience at each phase
 - Identify only critical path dependencies, not exhaustive lists
+- Ensure thta you number the Epics accordng to their phase and number order
 
 Generate a focused roadmap using proven game development milestone phases that enables clear development decisions and progress validation.
 
