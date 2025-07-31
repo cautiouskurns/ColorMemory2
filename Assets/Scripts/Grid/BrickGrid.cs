@@ -64,6 +64,22 @@ public class BrickGrid : MonoBehaviour
     [Tooltip("Show grid bounds and visualization gizmos in Scene view.")]
     [SerializeField] private bool showGridGizmos = true;
     
+    [Header("Debug and Validation")]
+    [Tooltip("Enable debug visualization for grid bounds, positioning, and validation status.")]
+    [SerializeField] private bool enableDebugVisualization = true;
+    
+    [Tooltip("Run comprehensive validation checks during grid generation.")]
+    [SerializeField] private bool runValidationOnGeneration = true;
+    
+    [Tooltip("Color for drawing grid bounds and positioning gizmos in Scene view.")]
+    [SerializeField] private Color debugBoundsColor = Color.yellow;
+    
+    [Tooltip("Color for highlighting validation errors in gizmo visualization.")]
+    [SerializeField] private Color debugErrorColor = Color.red;
+    
+    [Tooltip("Color for indicating successful validation in gizmo visualization.")]
+    [SerializeField] private Color debugSuccessColor = Color.green;
+    
     [Header("Auto Generation")]
     [Tooltip("Automatically generate the grid when the game starts (in Play mode).")]
     [SerializeField] private bool autoGenerateOnStart = true;
@@ -698,22 +714,487 @@ public class BrickGrid : MonoBehaviour
     }
     
     /// <summary>
-    /// Validates the current grid state and integrity.
-    /// This method will be implemented in future tasks with comprehensive validation.
+    /// Validates the current grid state and integrity with comprehensive checks.
     /// </summary>
     /// <returns>True if grid state is valid</returns>
     public bool ValidateGrid()
     {
-        LogDebug("🧪 [BrickGrid] ValidateGrid() called - implementation pending");
+        LogDebug("🧪 [BrickGrid] Starting comprehensive grid validation...");
         
-        // TODO: Implement grid validation logic in future tasks
-        // - Check brick count consistency
-        // - Validate brick positions and spacing
-        // - Verify brick component states
-        // - Check completion status accuracy
+        bool isValid = true;
         
-        LogDebug("📋 [BrickGrid] Grid validation framework ready - awaiting implementation");
-        return true; // Placeholder return
+        // Run all validation checks
+        isValid &= ValidateGridConfiguration();
+        isValid &= ValidateGeneratedGrid();
+        isValid &= ValidateBrickCount();
+        isValid &= ValidatePositionAccuracy();
+        
+        LogValidationResults("Grid Validation", isValid);
+        return isValid;
+    }
+    
+    /// <summary>
+    /// Validates GridData configuration for errors before generation attempts.
+    /// Checks for null references, invalid dimensions, and configuration conflicts.
+    /// </summary>
+    /// <returns>True if grid configuration is valid</returns>
+    public bool ValidateGridConfiguration()
+    {
+        LogDebug("🔍 [Validation] Checking grid configuration...");
+        
+        bool isValid = true;
+        List<string> errors = new List<string>();
+        
+        // Check GridData reference
+        if (gridConfiguration == null)
+        {
+            errors.Add("GridData configuration is null");
+            isValid = false;
+        }
+        else
+        {
+            // Check grid dimensions
+            if (gridConfiguration.rows <= 0 || gridConfiguration.columns <= 0)
+            {
+                errors.Add($"Invalid grid dimensions: {gridConfiguration.rows}x{gridConfiguration.columns}");
+                isValid = false;
+            }
+            
+            // Check spacing values
+            if (gridConfiguration.horizontalSpacing <= 0 || gridConfiguration.verticalSpacing <= 0)
+            {
+                errors.Add($"Invalid spacing values: {gridConfiguration.horizontalSpacing}x{gridConfiguration.verticalSpacing}");
+                isValid = false;
+            }
+            
+            // Check pattern density for random patterns
+            if (gridConfiguration.pattern == LayoutPattern.Random)
+            {
+                float density = useGridDataPattern ? gridConfiguration.density : patternDensity;
+                if (density <= 0f || density > 1f)
+                {
+                    errors.Add($"Invalid pattern density: {density} (must be 0.1-1.0)");
+                    isValid = false;
+                }
+            }
+        }
+        
+        // Check brick prefab reference
+        if (brickPrefab == null)
+        {
+            errors.Add("Brick prefab is not assigned");
+            isValid = false;
+        }
+        else
+        {
+            // Validate brick prefab has required components
+            if (brickPrefab.GetComponent<Brick>() == null)
+            {
+                errors.Add("Brick prefab missing Brick component");
+                isValid = false;
+            }
+        }
+        
+        // Check brick data configurations
+        if (brickDataConfigurations == null || brickDataConfigurations.Length == 0)
+        {
+            errors.Add("No brick data configurations found");
+            isValid = false;
+        }
+        
+        // Log results
+        if (errors.Count > 0)
+        {
+            LogWarning($"⚠️ [Validation] Configuration validation failed:");
+            foreach (string error in errors)
+            {
+                LogWarning($"   • {error}");
+            }
+        }
+        
+        LogValidationResults("Configuration Validation", isValid);
+        return isValid;
+    }
+    
+    /// <summary>
+    /// Validates generated grid accuracy and completeness.
+    /// Verifies brick placement, counts, and hierarchy organization.
+    /// </summary>
+    /// <returns>True if generated grid is valid</returns>
+    public bool ValidateGeneratedGrid()
+    {
+        LogDebug("🔍 [Validation] Checking generated grid...");
+        
+        if (!gridGenerated)
+        {
+            LogDebug("📋 [Validation] No grid generated - skipping generated grid validation");
+            return true; // Valid state for non-generated grid
+        }
+        
+        bool isValid = true;
+        List<string> errors = new List<string>();
+        
+        // Check grid container exists
+        if (gridContainer == null)
+        {
+            errors.Add("Grid container is missing");
+            isValid = false;
+        }
+        
+        // Validate brick counts match expected
+        int expectedBricks = CalculateExpectedBrickCount();
+        int actualBricks = instantiatedBricks.Count;
+        
+        if (actualBricks != expectedBricks)
+        {
+            errors.Add($"Brick count mismatch: expected {expectedBricks}, found {actualBricks}");
+            isValid = false;
+        }
+        
+        // Validate active brick components
+        int activeBricksFound = 0;
+        int nullBricksFound = 0;
+        
+        foreach (GameObject brickObj in instantiatedBricks)
+        {
+            if (brickObj == null)
+            {
+                nullBricksFound++;
+                continue;
+            }
+            
+            Brick brickComponent = brickObj.GetComponent<Brick>();
+            if (brickComponent != null)
+            {
+                activeBricksFound++;
+            }
+        }
+        
+        if (nullBricksFound > 0)
+        {
+            errors.Add($"Found {nullBricksFound} null brick references");
+            isValid = false;
+        }
+        
+        if (activeBricksFound != actualBricks - nullBricksFound)
+        {
+            errors.Add($"Brick component mismatch: {activeBricksFound} components for {actualBricks - nullBricksFound} objects");
+            isValid = false;
+        }
+        
+        // Validate hierarchy organization
+        if (useRowOrganization)
+        {
+            if (rowContainers.Length != gridConfiguration.rows)
+            {
+                errors.Add($"Row container count mismatch: expected {gridConfiguration.rows}, found {rowContainers.Length}");
+                isValid = false;
+            }
+        }
+        
+        // Log results
+        if (errors.Count > 0)
+        {
+            LogWarning($"⚠️ [Validation] Generated grid validation failed:");
+            foreach (string error in errors)
+            {
+                LogWarning($"   • {error}");
+            }
+        }
+        
+        LogValidationResults("Generated Grid Validation", isValid);
+        return isValid;
+    }
+    
+    /// <summary>
+    /// Test generation of all pattern types for validation and performance testing.
+    /// </summary>
+    public void TestAllPatterns()
+    {
+        LogDebug("🎭 [Validation] Testing all pattern types...");
+        
+        if (gridConfiguration == null)
+        {
+            LogWarning("⚠️ [Validation] Cannot test patterns - no grid configuration");
+            return;
+        }
+        
+        LayoutPattern originalPattern = gridConfiguration.pattern;
+        bool wasGenerated = gridGenerated;
+        
+        LayoutPattern[] patterns = { LayoutPattern.Standard, LayoutPattern.Pyramid, LayoutPattern.Diamond, LayoutPattern.Random };
+        
+        foreach (LayoutPattern pattern in patterns)
+        {
+            LogDebug($"🧪 [Validation] Testing {pattern} pattern...");
+            
+            try
+            {
+                // Set pattern and generate
+                gridConfiguration.pattern = pattern;
+                if (wasGenerated) ClearGrid();
+                
+                System.DateTime startTime = System.DateTime.Now;
+                GenerateGrid();
+                System.TimeSpan generationTime = System.DateTime.Now - startTime;
+                
+                // Validate results
+                bool isValid = ValidateGeneratedGrid();
+                int brickCount = instantiatedBricks.Count;
+                
+                LogValidationResults($"{pattern} Pattern Test", isValid);
+                LogDebug($"   • Generated {brickCount} bricks in {generationTime.TotalMilliseconds:F1}ms");
+                
+                if (!isValid)
+                {
+                    LogWarning($"⚠️ [Validation] {pattern} pattern validation failed");
+                }
+            }
+            catch (System.Exception e)
+            {
+                LogWarning($"⚠️ [Validation] {pattern} pattern test failed: {e.Message}");
+            }
+        }
+        
+        // Restore original state
+        gridConfiguration.pattern = originalPattern;
+        if (wasGenerated)
+        {
+            ClearGrid();
+            GenerateGrid();
+        }
+        
+        LogDebug("✅ [Validation] Pattern testing complete");
+    }
+    
+    /// <summary>
+    /// Run performance testing for large grid configurations.
+    /// </summary>
+    public void RunPerformanceTest()
+    {
+        LogDebug("⚡ [Performance] Starting performance testing...");
+        
+        if (gridConfiguration == null)
+        {
+            LogWarning("⚠️ [Performance] Cannot test performance - no grid configuration");
+            return;
+        }
+        
+        // Store original configuration
+        int originalRows = gridConfiguration.rows;
+        int originalColumns = gridConfiguration.columns;
+        LayoutPattern originalPattern = gridConfiguration.pattern;
+        bool wasGenerated = gridGenerated;
+        
+        // Test configurations: small, medium, large
+        var testConfigs = new[]
+        {
+            new { rows = 5, columns = 8, name = "Small Grid (5x8)" },
+            new { rows = 10, columns = 15, name = "Medium Grid (10x15)" },
+            new { rows = 15, columns = 20, name = "Large Grid (15x20)" }
+        };
+        
+        foreach (var config in testConfigs)
+        {
+            LogDebug($"📊 [Performance] Testing {config.name}...");
+            
+            gridConfiguration.rows = config.rows;
+            gridConfiguration.columns = config.columns;
+            
+            if (wasGenerated) ClearGrid();
+            
+            // Measure generation time
+            System.DateTime startTime = System.DateTime.Now;
+            GenerateGrid();
+            System.TimeSpan generationTime = System.DateTime.Now - startTime;
+            
+            // Measure validation time
+            System.DateTime validationStart = System.DateTime.Now;
+            bool isValid = ValidateGeneratedGrid();
+            System.TimeSpan validationTime = System.DateTime.Now - validationStart;
+            
+            int brickCount = instantiatedBricks.Count;
+            
+            LogDebug($"   • {config.name}: {brickCount} bricks");
+            LogDebug($"   • Generation: {generationTime.TotalMilliseconds:F1}ms");
+            LogDebug($"   • Validation: {validationTime.TotalMilliseconds:F1}ms");
+            LogDebug($"   • Valid: {isValid}");
+            
+            // Performance recommendations
+            if (generationTime.TotalMilliseconds > 100)
+            {
+                LogWarning($"⚠️ [Performance] Slow generation for {config.name}: {generationTime.TotalMilliseconds:F1}ms");
+                LogDebug("   💡 Consider enabling batch instantiation or reducing grid size");
+            }
+        }
+        
+        // Restore original configuration
+        gridConfiguration.rows = originalRows;
+        gridConfiguration.columns = originalColumns;
+        gridConfiguration.pattern = originalPattern;
+        
+        if (wasGenerated)
+        {
+            ClearGrid();
+            GenerateGrid();
+        }
+        
+        LogDebug("✅ [Performance] Performance testing complete");
+    }
+    
+    /// <summary>
+    /// Utility method to validate brick count consistency.
+    /// </summary>
+    /// <returns>True if brick counts are consistent</returns>
+    private bool ValidateBrickCount()
+    {
+        LogDebug("🔢 [Validation] Checking brick count consistency...");
+        
+        if (!gridGenerated)
+        {
+            return true; // No grid to validate
+        }
+        
+        bool isValid = true;
+        
+        // Check instantiated bricks count
+        int instantiatedCount = instantiatedBricks.Count;
+        int activeBricksCount = activeBricks.Count;
+        int serializedBrickCount = brickCount;
+        
+        // Compare counts
+        if (instantiatedCount != activeBricksCount)
+        {
+            LogWarning($"⚠️ [Validation] Brick count mismatch: instantiated={instantiatedCount}, active={activeBricksCount}");
+            isValid = false;
+        }
+        
+        if (serializedBrickCount != activeBricksCount)
+        {
+            LogWarning($"⚠️ [Validation] Serialized count mismatch: serialized={serializedBrickCount}, active={activeBricksCount}");
+            isValid = false;
+        }
+        
+        LogValidationResults("Brick Count Validation", isValid);
+        return isValid;
+    }
+    
+    /// <summary>
+    /// Utility method to validate position accuracy of placed bricks.
+    /// </summary>
+    /// <returns>True if brick positions are accurate</returns>
+    private bool ValidatePositionAccuracy()
+    {
+        LogDebug("📐 [Validation] Checking position accuracy...");
+        
+        if (!gridGenerated || gridConfiguration == null)
+        {
+            return true; // No grid to validate
+        }
+        
+        bool isValid = true;
+        int positionErrors = 0;
+        float tolerance = 0.1f; // Position tolerance
+        
+        // Check each instantiated brick position
+        foreach (GameObject brickObj in instantiatedBricks)
+        {
+            if (brickObj == null) continue;
+            
+            // Try to determine expected position from brick name or position
+            Vector3 actualPosition = brickObj.transform.position;
+            
+            // Find closest expected grid position
+            float minDistance = float.MaxValue;
+            for (int row = 0; row < gridConfiguration.rows; row++)
+            {
+                for (int col = 0; col < gridConfiguration.columns; col++)
+                {
+                    Vector3 expectedPosition = CalculateGridPosition(row, col);
+                    float distance = Vector3.Distance(actualPosition, expectedPosition);
+                    minDistance = Mathf.Min(minDistance, distance);
+                }
+            }
+            
+            if (minDistance > tolerance)
+            {
+                positionErrors++;
+                if (positionErrors <= 5) // Limit error spam
+                {
+                    LogWarning($"⚠️ [Validation] Position error: {brickObj.name} at {actualPosition}, closest expected distance: {minDistance:F3}");
+                }
+            }
+        }
+        
+        if (positionErrors > 0)
+        {
+            LogWarning($"⚠️ [Validation] Found {positionErrors} position errors (tolerance: {tolerance})");
+            isValid = false;
+        }
+        
+        LogValidationResults("Position Accuracy Validation", isValid);
+        return isValid;
+    }
+    
+    /// <summary>
+    /// Calculate expected brick count for current configuration and pattern.
+    /// </summary>
+    /// <returns>Expected number of bricks</returns>
+    private int CalculateExpectedBrickCount()
+    {
+        if (gridConfiguration == null) return 0;
+        
+        int totalPositions = gridConfiguration.rows * gridConfiguration.columns;
+        
+        // Pattern-specific calculations
+        switch (gridConfiguration.pattern)
+        {
+            case LayoutPattern.Standard:
+                return totalPositions;
+                
+            case LayoutPattern.Pyramid:
+                // Triangular pattern has fewer bricks
+                int pyramidCount = 0;
+                for (int row = 0; row < gridConfiguration.rows; row++)
+                {
+                    pyramidCount += CalculatePyramidBricksInRow(row, gridConfiguration.rows, gridConfiguration.columns);
+                }
+                return pyramidCount;
+                
+            case LayoutPattern.Diamond:
+                // Diamond pattern calculation
+                int diamondCount = 0;
+                for (int row = 0; row < gridConfiguration.rows; row++)
+                {
+                    diamondCount += CalculateDiamondBricksInRow(row, gridConfiguration.rows, gridConfiguration.columns);
+                }
+                return diamondCount;
+                
+            case LayoutPattern.Random:
+                // Approximate based on density
+                float density = useGridDataPattern ? gridConfiguration.density : patternDensity;
+                return Mathf.RoundToInt(totalPositions * density);
+                
+            default:
+                return totalPositions;
+        }
+    }
+    
+    /// <summary>
+    /// Logs validation results in a consistent format.
+    /// </summary>
+    /// <param name="testName">Name of the validation test</param>
+    /// <param name="passed">Whether the test passed</param>
+    private void LogValidationResults(string testName, bool passed)
+    {
+        if (passed)
+        {
+            LogDebug($"✅ [Validation] {testName}: PASSED");
+        }
+        else
+        {
+            LogWarning($"❌ [Validation] {testName}: FAILED");
+        }
     }
     
     #endregion
@@ -1949,19 +2430,30 @@ public class BrickGrid : MonoBehaviour
     #region Gizmos
     
     /// <summary>
-    /// Draws grid visualization gizmos in Scene view.
+    /// Draws grid visualization gizmos in Scene view with comprehensive validation visualization.
     /// </summary>
     private void OnDrawGizmos()
     {
         if (!showGridGizmos || gridConfiguration == null) return;
+        
+        // Only show debug visualization if enabled
+        if (!enableDebugVisualization) return;
         
         // Calculate current bounds and positions
         Bounds calculatedBounds = GetGridBounds();
         Vector3 calculatedCenter = CalculateGridCenter();
         Vector3 startPos = GetStartingPosition();
         
-        // Draw calculated grid bounds
-        Gizmos.color = Color.yellow;
+        // Run validation checks for visualization
+        bool configValid = ValidateGridConfiguration();
+        bool boundsValid = ValidateGridBounds();
+        bool gridValid = gridGenerated ? ValidateGeneratedGrid() : true;
+        
+        // Choose color based on overall validation status
+        Color validationColor = (configValid && boundsValid && gridValid) ? debugSuccessColor : debugErrorColor;
+        
+        // Draw calculated grid bounds with validation color
+        Gizmos.color = validationColor;
         Gizmos.DrawWireCube(calculatedBounds.center, calculatedBounds.size);
         
         // Draw grid center
@@ -1973,24 +2465,39 @@ public class BrickGrid : MonoBehaviour
         // Draw play area bounds
         if (gridConfiguration.playAreaBounds.size != Vector3.zero)
         {
-            Gizmos.color = Color.cyan;
+            Gizmos.color = debugBoundsColor;
             Gizmos.DrawWireCube(gridConfiguration.playAreaBounds.center, gridConfiguration.playAreaBounds.size);
             
             // Draw edge margins
             Vector3 marginSize = gridConfiguration.playAreaBounds.size - new Vector3(gridConfiguration.edgeMargin * 2f, gridConfiguration.edgeMargin * 2f, 0f);
-            Gizmos.color = new Color(0f, 1f, 1f, 0.3f);
+            Gizmos.color = new Color(debugBoundsColor.r, debugBoundsColor.g, debugBoundsColor.b, 0.3f);
             Gizmos.DrawWireCube(gridConfiguration.playAreaBounds.center, marginSize);
         }
         
         // Draw grid start position
-        Gizmos.color = Color.green;
+        Gizmos.color = configValid ? debugSuccessColor : debugErrorColor;
         Gizmos.DrawWireSphere(startPos, 0.2f);
         
-        // Draw bounds validation status
-        bool boundsValid = ValidateGridBounds();
-        Gizmos.color = boundsValid ? Color.green : Color.red;
+        // Draw validation status indicators
         Vector3 statusPos = calculatedBounds.center + Vector3.up * (calculatedBounds.size.y * 0.5f + 0.5f);
+        
+        // Configuration validation indicator
+        Gizmos.color = configValid ? debugSuccessColor : debugErrorColor;
+        Gizmos.DrawWireCube(statusPos + Vector3.left * 0.8f, new Vector3(0.3f, 0.3f, 0.1f));
+        
+        // Bounds validation indicator
+        Gizmos.color = boundsValid ? debugSuccessColor : debugErrorColor;
         Gizmos.DrawWireCube(statusPos, new Vector3(0.3f, 0.3f, 0.1f));
+        
+        // Grid generation validation indicator (only if grid is generated)
+        if (gridGenerated)
+        {
+            Gizmos.color = gridValid ? debugSuccessColor : debugErrorColor;
+            Gizmos.DrawWireCube(statusPos + Vector3.right * 0.8f, new Vector3(0.3f, 0.3f, 0.1f));
+        }
+        
+        // Draw pattern-specific validation visualization
+        DrawPatternValidationGizmos();
     }
     
     /// <summary>
@@ -2049,6 +2556,78 @@ public class BrickGrid : MonoBehaviour
             Gizmos.color = new Color(1f, 0f, 1f, 0.5f);
             Vector3 patternCenter = CalculateGridCenter();
             Gizmos.DrawWireSphere(patternCenter, 0.5f);
+        }
+    }
+    
+    /// <summary>
+    /// Draws pattern-specific validation visualization gizmos.
+    /// </summary>
+    private void DrawPatternValidationGizmos()
+    {
+        if (gridConfiguration == null) return;
+        
+        // Get expected brick count for pattern validation
+        int expectedBricks = CalculateExpectedBrickCount();
+        int actualBricks = gridGenerated ? instantiatedBricks.Count : 0;
+        
+        // Draw pattern validation indicator
+        bool patternValid = !gridGenerated || (expectedBricks == actualBricks);
+        Vector3 patternCenter = CalculateGridCenter();
+        
+        Gizmos.color = patternValid ? debugSuccessColor : debugErrorColor;
+        
+        // Draw pattern-specific indicators
+        switch (gridConfiguration.pattern)
+        {
+            case LayoutPattern.Standard:
+                // Draw rectangular outline for standard pattern
+                Gizmos.DrawWireCube(patternCenter, new Vector3(0.5f, 0.5f, 0.1f));
+                break;
+                
+            case LayoutPattern.Pyramid:
+                // Draw triangular indicator for pyramid pattern
+                Gizmos.DrawWireSphere(patternCenter + Vector3.up * 0.3f, 0.2f);
+                Gizmos.DrawLine(patternCenter + Vector3.up * 0.3f, patternCenter + Vector3.left * 0.3f + Vector3.down * 0.2f);
+                Gizmos.DrawLine(patternCenter + Vector3.up * 0.3f, patternCenter + Vector3.right * 0.3f + Vector3.down * 0.2f);
+                Gizmos.DrawLine(patternCenter + Vector3.left * 0.3f + Vector3.down * 0.2f, patternCenter + Vector3.right * 0.3f + Vector3.down * 0.2f);
+                break;
+                
+            case LayoutPattern.Diamond:
+                // Draw diamond indicator
+                Gizmos.DrawLine(patternCenter + Vector3.up * 0.3f, patternCenter + Vector3.right * 0.3f);
+                Gizmos.DrawLine(patternCenter + Vector3.right * 0.3f, patternCenter + Vector3.down * 0.3f);
+                Gizmos.DrawLine(patternCenter + Vector3.down * 0.3f, patternCenter + Vector3.left * 0.3f);
+                Gizmos.DrawLine(patternCenter + Vector3.left * 0.3f, patternCenter + Vector3.up * 0.3f);
+                break;
+                
+            case LayoutPattern.Random:
+                // Draw scattered dots for random pattern
+                Random.InitState(patternSeed);
+                for (int i = 0; i < 8; i++)
+                {
+                    Vector3 randomOffset = new Vector3(
+                        Random.Range(-0.4f, 0.4f),
+                        Random.Range(-0.4f, 0.4f),
+                        0f
+                    );
+                    Gizmos.DrawWireSphere(patternCenter + randomOffset, 0.05f);
+                }
+                break;
+        }
+        
+        // Draw brick count validation if grid is generated
+        if (gridGenerated)
+        {
+            Vector3 countPos = patternCenter + Vector3.down * 0.8f;
+            Gizmos.color = patternValid ? debugSuccessColor : debugErrorColor;
+            Gizmos.DrawWireCube(countPos, new Vector3(0.2f, 0.2f, 0.1f));
+            
+            // Draw expected vs actual count indicators
+            float countRatio = expectedBricks > 0 ? (float)actualBricks / expectedBricks : 1f;
+            Color countColor = Mathf.Approximately(countRatio, 1f) ? debugSuccessColor : debugErrorColor;
+            
+            Gizmos.color = countColor;
+            Gizmos.DrawWireSphere(countPos + Vector3.up * 0.3f, 0.1f * countRatio);
         }
     }
     
