@@ -70,6 +70,32 @@ public class Brick : MonoBehaviour
     [Tooltip("Enable detailed destruction logging for debugging")]
     [SerializeField] private bool enableDestructionLogging = false;
     
+    [Header("Visual Effects")]
+    [Tooltip("Particle system for destruction effects (auto-configured if missing)")]
+    [SerializeField] private ParticleSystem destructionParticles;
+    
+    [Tooltip("Number of particles to emit on destruction")]
+    [Range(5, 50)]
+    [SerializeField] private int particleCount = 15;
+    
+    [Tooltip("Lifetime of destruction particles in seconds")]
+    [Range(0.3f, 3.0f)]
+    [SerializeField] private float particleLifetime = 1.0f;
+    
+    [Tooltip("Initial speed of destruction particles")]
+    [Range(1.0f, 20.0f)]
+    [SerializeField] private float particleSpeed = 8.0f;
+    
+    [Tooltip("Size of destruction particles")]
+    [Range(0.05f, 0.5f)]
+    [SerializeField] private float particleSize = 0.1f;
+    
+    [Tooltip("Enable visual effects on destruction")]
+    [SerializeField] private bool enableVisualEffects = true;
+    
+    [Tooltip("Enable visual effects debug logging")]
+    [SerializeField] private bool enableEffectsLogging = false;
+    
     #endregion
     
     #region Private Fields
@@ -93,6 +119,11 @@ public class Brick : MonoBehaviour
     private bool destructionTriggered = false;
     private float destructionStartTime = 0f;
     private bool cleanupCompleted = false;
+    
+    // Visual effects tracking
+    private bool visualEffectsInitialized = false;
+    private bool effectsTriggered = false;
+    private ParticleSystem.EmitParams particleEmitParams;
     
     #endregion
     
@@ -180,6 +211,21 @@ public class Brick : MonoBehaviour
     /// </summary>
     public float DestructionDelay => destructionDelay;
     
+    /// <summary>
+    /// Gets whether visual effects system has been initialized
+    /// </summary>
+    public bool VisualEffectsInitialized => visualEffectsInitialized;
+    
+    /// <summary>
+    /// Gets whether destruction effects have been triggered
+    /// </summary>
+    public bool EffectsTriggered => effectsTriggered;
+    
+    /// <summary>
+    /// Gets the destruction particle system component
+    /// </summary>
+    public ParticleSystem DestructionParticles => destructionParticles;
+    
     #endregion
     
     #region Unity Lifecycle
@@ -224,6 +270,9 @@ public class Brick : MonoBehaviour
         
         // Initialize collision detection system
         InitializeCollisionSystem();
+        
+        // Initialize visual effects system
+        InitializeVisualEffectsSystem();
         
         startCompleted = true;
         LogDebug("[Brick] Start() completed successfully");
@@ -637,6 +686,10 @@ public class Brick : MonoBehaviour
     {
         LogDestructionDebug("[Brick] ProcessDestruction() - Beginning destruction sequence");
         
+        // Reset effects flag to allow destruction effects to trigger
+        effectsTriggered = false;
+        Debug.Log("[Brick] Reset effectsTriggered flag for destruction particle effects");
+        
         // Mark destruction as triggered immediately
         destructionTriggered = true;
         destructionStartTime = Time.time;
@@ -644,14 +697,32 @@ public class Brick : MonoBehaviour
         
         try
         {
+            // Trigger visual effects before cleanup
+            TriggerDestructionEffects();
+            
             // Notify destruction systems before cleanup
             NotifyDestructionSystems();
             
-            // Clean up references and subscriptions
+            // Hide brick immediately but keep particle system alive
+            HideBrickImmediately();
+            
+            // DELAY ONLY the particle cleanup to allow particles to play
+            float delayTime = this.particleLifetime > 0 ? this.particleLifetime : 2.0f;
+            Debug.Log($"[Brick] Delaying particle cleanup by {delayTime} seconds to allow particles to play");
+            
+            // Clean up references immediately (except particles)
             CleanupReferences();
             
-            // Destroy GameObject with configured delay
-            DestroyGameObject();
+            // Use Invoke to delay only the particle cleanup and final destruction
+            if (Application.isPlaying)
+            {
+                Invoke(nameof(DelayedParticleCleanup), delayTime);
+            }
+            else
+            {
+                // In editor mode, do immediate cleanup
+                DestroyGameObject();
+            }
             
             LogDestructionDebug($"[Brick] Destruction sequence completed for {currentBrickType} brick");
         }
@@ -668,6 +739,66 @@ public class Brick : MonoBehaviour
             {
                 LogError($"[Brick] Critical error: Failed to destroy GameObject: {destroyException.Message}");
             }
+        }
+    }
+    
+    /// <summary>
+    /// Hides the brick immediately while keeping particles alive
+    /// </summary>
+    private void HideBrickImmediately()
+    {
+        Debug.Log("[Brick] Hiding brick immediately while particles play");
+        
+        try
+        {
+            // Disable collider so it can't be hit again
+            if (brickCollider != null)
+            {
+                brickCollider.enabled = false;
+            }
+            
+            // Hide visual components
+            if (brickRenderer != null)
+            {
+                brickRenderer.enabled = false;
+            }
+            
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.enabled = false;
+            }
+            
+            // Keep the particle system GameObject active but hide the brick
+            Debug.Log("[Brick] Brick hidden - collider disabled, renderers disabled");
+        }
+        catch (System.Exception e)
+        {
+            LogError($"[Brick] Error hiding brick: {e.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// Delayed particle cleanup and final destruction
+    /// </summary>
+    private void DelayedParticleCleanup()
+    {
+        Debug.Log("[Brick] Performing delayed particle cleanup and final destruction");
+        
+        try
+        {
+            // Final cleanup of particle system
+            if (destructionParticles != null)
+            {
+                destructionParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                destructionParticles = null;
+            }
+            
+            // Destroy GameObject
+            DestroyGameObject();
+        }
+        catch (System.Exception e)
+        {
+            LogError($"[Brick] Error during delayed particle cleanup: {e.Message}");
         }
     }
     
@@ -734,11 +865,15 @@ public class Brick : MonoBehaviour
         
         try
         {
+            // Clean up visual effects
+            CleanupParticleEffects();
+            
             // Clear component references
             brickCollider = null;
             brickRenderer = null;
             spriteRenderer = null;
             collisionManager = null;
+            destructionParticles = null;
             
             // Clear instance event subscribers to prevent memory leaks
             if (OnThisBrickDestroyed != null)
@@ -923,6 +1058,283 @@ public class Brick : MonoBehaviour
         }
         
         return layerNames.Length > 0 ? layerNames.ToString() : "None";
+    }
+    
+    #endregion
+    
+    #region Visual Effects System
+    
+    /// <summary>
+    /// Initializes the visual effects system and configures particle system
+    /// </summary>
+    private void InitializeVisualEffectsSystem()
+    {
+        LogDebug("[Brick] Initializing visual effects system...");
+        
+        try
+        {
+            // Find or validate particle system component
+            if (destructionParticles == null)
+            {
+                destructionParticles = GetComponentInChildren<ParticleSystem>();
+                if (destructionParticles == null)
+                {
+                    LogDebug("[Brick] No ParticleSystem found - destruction effects will be skipped");
+                    visualEffectsInitialized = false;
+                    return;
+                }
+            }
+            
+            // Configure particle system for dynamic color matching
+            ConfigureParticleSystem();
+            
+            // Initialize particle emission parameters
+            particleEmitParams = new ParticleSystem.EmitParams();
+            
+            visualEffectsInitialized = true;
+            LogDebug("[Brick] Visual effects system initialized successfully");
+        }
+        catch (System.Exception e)
+        {
+            LogError($"[Brick] Failed to initialize visual effects system: {e.Message}");
+            visualEffectsInitialized = false;
+        }
+    }
+    
+    /// <summary>
+    /// Configures particle system with dynamic color matching from brick data
+    /// </summary>
+    private void ConfigureParticleSystem()
+    {
+        if (destructionParticles == null || brickData == null)
+        {
+            return;
+        }
+        
+        LogDebug("[Brick] Configuring particle system with dynamic color matching...");
+        
+        var main = destructionParticles.main;
+        var emission = destructionParticles.emission;
+        var shape = destructionParticles.shape;
+        var velocityOverLifetime = destructionParticles.velocityOverLifetime;
+        var sizeOverLifetime = destructionParticles.sizeOverLifetime;
+        
+        // Configure main module with brick color
+        main.startColor = brickData.brickColor;
+        main.startLifetime = particleLifetime;
+        main.startSpeed = particleSpeed;
+        main.startSize = particleSize;
+        main.maxParticles = particleCount;
+        
+        // Configure emission
+        emission.enabled = false; // We'll emit manually
+        emission.SetBursts(new ParticleSystem.Burst[]
+        {
+            new ParticleSystem.Burst(0.0f, particleCount)
+        });
+        
+        // Configure shape for brick destruction
+        shape.enabled = true;
+        shape.shapeType = ParticleSystemShapeType.Box;
+        shape.scale = new Vector3(1f, 0.5f, 0.1f); // Match typical brick dimensions
+        
+        // Configure velocity for explosion effect
+        velocityOverLifetime.enabled = true;
+        velocityOverLifetime.space = ParticleSystemSimulationSpace.Local;
+        velocityOverLifetime.radial = new ParticleSystem.MinMaxCurve(2f, 5f);
+        
+        // Configure size decay
+        sizeOverLifetime.enabled = true;
+        sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, 0f);
+        
+        LogDebug($"[Brick] Particle system configured - Color: {brickData.brickColor}, Count: {particleCount}, Lifetime: {particleLifetime}");
+    }
+    
+    /// <summary>
+    /// Triggers destruction visual effects when brick is destroyed
+    /// </summary>
+    private void TriggerDestructionEffects()
+    {
+        Debug.Log($"[Brick] TriggerDestructionEffects called - visualEffectsInitialized: {visualEffectsInitialized}, hasDestructionEffects: {(brickData != null ? brickData.hasDestructionEffects.ToString() : "brickData is null")}");
+        
+        if (!visualEffectsInitialized)
+        {
+            Debug.LogWarning($"[Brick] Visual effects not initialized! Attempting to initialize now...");
+            InitializeVisualEffectsSystem();
+        }
+        
+        if (brickData == null)
+        {
+            Debug.LogError("[Brick] BrickData is null - cannot trigger effects");
+            return;
+        }
+        
+        if (!brickData.hasDestructionEffects)
+        {
+            Debug.LogWarning($"[Brick] BrickData.hasDestructionEffects is false for {brickData.brickType} brick - enabling effects");
+            brickData.hasDestructionEffects = true; // Force enable for testing
+        }
+        
+        if (effectsTriggered)
+        {
+            Debug.LogWarning("[Brick] Destruction effects already triggered - skipping duplicate emission");
+            return;
+        }
+        
+        Debug.Log("[Brick] Triggering destruction visual effects...");
+        
+        try
+        {
+            // Emit destruction particles
+            EmitDestructionParticles();
+            
+            // Mark effects as triggered to prevent duplicates
+            effectsTriggered = true;
+            
+            Debug.Log("[Brick] Destruction visual effects triggered successfully");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[Brick] Failed to trigger destruction effects: {e.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// Emits destruction particles with burst effect
+    /// </summary>
+    private void EmitDestructionParticles()
+    {
+        Debug.Log($"[Brick] EmitDestructionParticles called - destructionParticles: {(destructionParticles != null ? "Found" : "NULL")}");
+        
+        if (destructionParticles == null)
+        {
+            Debug.LogError("[Brick] No particle system available for destruction effects - trying to find one...");
+            destructionParticles = GetComponentInChildren<ParticleSystem>();
+            if (destructionParticles == null)
+            {
+                Debug.LogError("[Brick] Still no ParticleSystem found in children - creating one now");
+                CreateEmergencyParticleSystem();
+                return;
+            }
+            Debug.Log("[Brick] Found ParticleSystem in children - using it");
+        }
+        
+        Debug.Log($"[Brick] ParticleSystem found: {destructionParticles.gameObject.name} at position {destructionParticles.transform.position}");
+        
+        // Reconfigure color to ensure it matches current brick state
+        var main = destructionParticles.main;
+        if (brickData != null)
+        {
+            main.startColor = brickData.brickColor;
+            Debug.Log($"[Brick] Set particle color to {brickData.brickColor}");
+        }
+        
+        // Configure emission parameters
+        particleEmitParams.position = transform.position;
+        particleEmitParams.applyShapeToPosition = true;
+        
+        Debug.Log($"[Brick] About to emit {particleCount} particles at {transform.position}");
+        
+        // Emit particles in burst
+        destructionParticles.Emit(particleEmitParams, particleCount);
+        
+        // Force the particle system to play
+        if (!destructionParticles.isPlaying)
+        {
+            destructionParticles.Play();
+            Debug.Log("[Brick] Started particle system playback");
+        }
+        
+        Debug.Log($"[Brick] Successfully emitted {particleCount} destruction particles at {transform.position}");
+        Debug.Log($"[Brick] ParticleSystem state - isPlaying: {destructionParticles.isPlaying}, particleCount: {destructionParticles.particleCount}");
+    }
+    
+    /// <summary>
+    /// Creates an emergency particle system if none is found
+    /// </summary>
+    private void CreateEmergencyParticleSystem()
+    {
+        Debug.Log("[Brick] Creating emergency ParticleSystem for destruction effects...");
+        
+        try
+        {
+            // Create child GameObject for ParticleSystem
+            GameObject particleChild = new GameObject("EmergencyDestructionParticles");
+            particleChild.transform.SetParent(transform);
+            particleChild.transform.localPosition = Vector3.zero;
+            
+            // Add ParticleSystem component
+            destructionParticles = particleChild.AddComponent<ParticleSystem>();
+            
+            // Configure basic particle system settings
+            var main = destructionParticles.main;
+            main.startLifetime = particleLifetime;
+            main.startSpeed = particleSpeed;
+            main.startSize = particleSize;
+            main.startColor = brickData != null ? brickData.brickColor : Color.white;
+            main.maxParticles = particleCount;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.loop = false;
+            
+            var emission = destructionParticles.emission;
+            emission.enabled = false; // Manual emission only
+            
+            var shape = destructionParticles.shape;
+            shape.enabled = true;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = 0.5f;
+            
+            // Initialize emission parameters
+            particleEmitParams = new ParticleSystem.EmitParams();
+            visualEffectsInitialized = true;
+            
+            Debug.Log("[Brick] Emergency ParticleSystem created and configured");
+            
+            // Now emit the particles
+            EmitDestructionParticles();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[Brick] Failed to create emergency ParticleSystem: {e.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// Cleans up particle effects and system references
+    /// </summary>
+    private void CleanupParticleEffects()
+    {
+        LogDebug("[Brick] Cleaning up particle effects...");
+        
+        try
+        {
+            // During destruction, don't touch particles - they're handled by DelayedParticleCleanup
+            if (isDestroyed)
+            {
+                LogDebug("[Brick] Brick destroyed - particles will be cleaned up by DelayedParticleCleanup");
+                // Don't touch destructionParticles - let DelayedParticleCleanup handle it
+            }
+            else
+            {
+                // Normal cleanup - stop particles
+                if (destructionParticles != null)
+                {
+                    destructionParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                    LogDebug("[Brick] Particle system stopped and cleared");
+                    destructionParticles = null;
+                }
+            }
+            
+            // Reset visual effects state
+            visualEffectsInitialized = false;
+            effectsTriggered = false;
+            
+            LogDebug("[Brick] Particle effects cleanup completed");
+        }
+        catch (System.Exception e)
+        {
+            LogError($"[Brick] Error during particle effects cleanup: {e.Message}");
+        }
     }
     
     #endregion
