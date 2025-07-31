@@ -109,8 +109,13 @@ public class BallPhysicsDebugger : MonoBehaviour
     {
         if (!enableDebugDisplay || !componentsValid) return;
         
-        // Set up GUI style
+        // Null check for GUI skin
+        if (GUI.skin == null) return;
+        
+        // Set up GUI style with null checks
         GUIStyle debugStyle = new GUIStyle(GUI.skin.box);
+        if (debugStyle == null) return;
+        
         debugStyle.alignment = TextAnchor.UpperLeft;
         debugStyle.fontSize = 12;
         debugStyle.normal.textColor = Color.white;
