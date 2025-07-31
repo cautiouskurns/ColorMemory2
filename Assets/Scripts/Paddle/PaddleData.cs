@@ -32,14 +32,14 @@ public class PaddleData
     [Header("Movement Properties")]
     [Tooltip("Maximum movement speed of the paddle in units per second")]
     [Range(1f, 20f)]
-    public float movementSpeed = 12.0f;
+    public float movementSpeed = 10.0f;
     
     [Tooltip("Acceleration rate for paddle movement responsiveness")]
     [Range(5f, 30f)]
-    public float acceleration = 15.0f;
+    public float acceleration = 10.0f;
     
     [Tooltip("Physical dimensions of the paddle (width, height)")]
-    public Vector2 paddleDimensions = new Vector2(2.0f, 0.3f);
+    public Vector2 paddleDimensions = new Vector2(3.0f, 0.3f);
     
     [Header("Input Configuration")]
     [Tooltip("Sensitivity multiplier for input response (0.5 = half sensitivity, 2.0 = double sensitivity)")]
@@ -156,34 +156,35 @@ public class PaddleData
     {
         bool isValid = true;
         
-        // Validate movement properties
+        // Validate movement properties (only fix truly invalid values)
         if (movementSpeed <= 0f)
         {
-            Debug.LogWarning("[PaddleData] Movement speed must be greater than 0. Setting to default value.");
-            movementSpeed = 8.0f;
+            Debug.LogWarning("[PaddleData] Movement speed must be greater than 0. Setting to minimum value.");
+            movementSpeed = 1.0f;
             isValid = false;
         }
         
         if (acceleration <= 0f)
         {
-            Debug.LogWarning("[PaddleData] Acceleration must be greater than 0. Setting to default value.");
-            acceleration = 15.0f;
+            Debug.LogWarning("[PaddleData] Acceleration must be greater than 0. Setting to minimum value.");
+            acceleration = 5.0f;
             isValid = false;
         }
         
         // Validate paddle dimensions
         if (paddleDimensions.x <= 0f || paddleDimensions.y <= 0f)
         {
-            Debug.LogWarning("[PaddleData] Paddle dimensions must be greater than 0. Setting to default values.");
-            paddleDimensions = new Vector2(2.0f, 0.3f);
+            Debug.LogWarning("[PaddleData] Paddle dimensions must be greater than 0. Setting to minimum values.");
+            if (paddleDimensions.x <= 0f) paddleDimensions.x = 0.5f;
+            if (paddleDimensions.y <= 0f) paddleDimensions.y = 0.1f;
             isValid = false;
         }
         
         // Validate input sensitivity
         if (inputSensitivity <= 0f)
         {
-            Debug.LogWarning("[PaddleData] Input sensitivity must be greater than 0. Setting to default value.");
-            inputSensitivity = 1.0f;
+            Debug.LogWarning("[PaddleData] Input sensitivity must be greater than 0. Setting to minimum value.");
+            inputSensitivity = 0.1f;
             isValid = false;
         }
         
@@ -322,6 +323,7 @@ public class PaddleData
     
     /// <summary>
     /// Initializes paddle data with validation and optional WebGL optimization.
+    /// This method resets runtime state and should only be called for new instances.
     /// </summary>
     /// <param name="optimizeForWebGL">Whether to apply WebGL-specific optimizations</param>
     public void Initialize(bool optimizeForWebGL = false)
@@ -338,6 +340,19 @@ public class PaddleData
         ResetState();
         
         Debug.Log($"[PaddleData] Paddle data initialized successfully (WebGL optimized: {optimizeForWebGL})");
+    }
+    
+    /// <summary>
+    /// Validates existing paddle data configuration without resetting state.
+    /// Use this for Inspector-configured PaddleData to preserve user settings.
+    /// </summary>
+    /// <returns>True if all parameters are valid</returns>
+    public bool ValidateExistingConfiguration()
+    {
+        bool isValid = ValidateParameters();
+        
+        Debug.Log($"[PaddleData] Existing configuration validated. Speed: {movementSpeed}, Acceleration: {acceleration}, Valid: {isValid}");
+        return isValid;
     }
     
     #endregion

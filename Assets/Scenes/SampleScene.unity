@@ -5333,6 +5333,11 @@ MonoBehaviour:
   enableDebugLogging: 1
   showGridGizmos: 1
   autoGenerateOnStart: 1
+  currentPattern: 0
+  useGridDataPattern: 1
+  patternDensity: 0.8
+  hollowCenter: 0
+  patternSeed: 42
 --- !u!4 &574296871
 Transform:
   m_ObjectHideFlags: 0
@@ -27724,12 +27729,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   paddleData:
-    movementSpeed: 15
-    acceleration: 15
-    paddleDimensions: {x: 2, y: 0.3}
+    movementSpeed: 10
+    acceleration: 10
+    paddleDimensions: {x: 4, y: 0.3}
     inputSensitivity: 1
     enableKeyboardInput: 1
-    enableMouseInput: 1
+    enableMouseInput: 0
     accelerationCurve:
       serializedVersion: 2
       m_Curve:
@@ -27754,9 +27759,9 @@ MonoBehaviour:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    smoothTime: 0.03
+    smoothTime: 0.05
     enableSmoothInput: 0
-    inputSmoothTime: 0.01
+    inputSmoothTime: 0.02
     targetResponseTime: 50
     leftBoundary: -8
     rightBoundary: 8
@@ -27883,7 +27888,7 @@ BoxCollider2D:
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
-  m_Size: {x: 2, y: 0.3}
+  m_Size: {x: 4, y: 0.3}
   m_EdgeRadius: 0
 --- !u!1 &2118087175
 GameObject:

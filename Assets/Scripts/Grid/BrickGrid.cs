@@ -68,6 +68,23 @@ public class BrickGrid : MonoBehaviour
     [Tooltip("Automatically generate the grid when the game starts (in Play mode).")]
     [SerializeField] private bool autoGenerateOnStart = true;
     
+    [Header("Pattern Configuration")]
+    [Tooltip("Current layout pattern for brick generation. Overrides GridData pattern if set.")]
+    [SerializeField] private LayoutPattern currentPattern = LayoutPattern.Standard;
+    
+    [Tooltip("Use GridData pattern setting instead of override pattern.")]
+    [SerializeField] private bool useGridDataPattern = true;
+    
+    [Tooltip("Density factor for random patterns. Controls percentage of positions filled with bricks.")]
+    [Range(0.1f, 1.0f)]
+    [SerializeField] private float patternDensity = 0.8f;
+    
+    [Tooltip("Create hollow center for diamond patterns. Reduces brick density in pattern center.")]
+    [SerializeField] private bool hollowCenter = false;
+    
+    [Tooltip("Pattern-specific randomization seed for reproducible layouts.")]
+    [SerializeField] private int patternSeed = 42;
+    
     // Internal state management
     private List<Brick> activeBricks = new();
     private List<GameObject> instantiatedBricks = new();
@@ -641,7 +658,7 @@ public class BrickGrid : MonoBehaviour
     
     /// <summary>
     /// Generates the brick grid based on current configuration.
-    /// Creates brick GameObjects using instantiation system with proper positioning and configuration.
+    /// Creates brick GameObjects using pattern-based generation with proper positioning and configuration.
     /// </summary>
     public void GenerateGrid()
     {
@@ -653,11 +670,12 @@ public class BrickGrid : MonoBehaviour
             return;
         }
         
-        // Clear existing grid first
-        ClearGrid();
+        // Determine which pattern to use
+        LayoutPattern patternToUse = useGridDataPattern && gridConfiguration != null ? 
+            gridConfiguration.pattern : currentPattern;
         
-        // Generate brick grid using instantiation system
-        GenerateGridBricks();
+        // Generate grid using pattern-based system
+        GeneratePattern(patternToUse);
         
         LogDebug("✅ [BrickGrid] Grid generation completed");
     }
@@ -888,6 +906,485 @@ public class BrickGrid : MonoBehaviour
         LogDebug($"   • Successful bricks: {successfulBricks}");
         LogDebug($"   • Generation time: {generationTime.TotalMilliseconds:F1}ms");
         LogDebug($"   • Average per brick: {(generationTime.TotalMilliseconds / successfulBricks):F2}ms");
+    }
+    
+    #endregion
+    
+    #region Layout Pattern Implementation
+    
+    /// <summary>
+    /// Generates brick layout using specified pattern algorithm.
+    /// Uses strategy pattern to switch between different formation types.
+    /// </summary>
+    /// <param name="pattern">Layout pattern to generate</param>
+    public void GeneratePattern(LayoutPattern pattern)
+    {
+        if (gridConfiguration == null)
+        {
+            LogError("❌ [BrickGrid] Cannot generate pattern: No GridData configuration");
+            return;
+        }
+        
+        LogDebug($"🎨 [BrickGrid] Generating {pattern} pattern...");
+        System.DateTime startTime = System.DateTime.Now;
+        
+        // Set random seed for reproducible patterns
+        Random.InitState(patternSeed);
+        
+        // Clear existing grid before generating new pattern
+        ClearGrid();
+        
+        int generatedBricks = 0;
+        
+        // Execute pattern-specific generation algorithm
+        switch (pattern)
+        {
+            case LayoutPattern.Standard:
+                generatedBricks = GenerateStandardPattern();
+                break;
+                
+            case LayoutPattern.Pyramid:
+                generatedBricks = GeneratePyramidPattern();
+                break;
+                
+            case LayoutPattern.Diamond:
+                generatedBricks = GenerateDiamondPattern();
+                break;
+                
+            case LayoutPattern.Random:
+                generatedBricks = GenerateRandomPattern();
+                break;
+                
+            case LayoutPattern.Custom:
+                generatedBricks = GenerateCustomPattern();
+                break;
+                
+            default:
+                LogWarning($"⚠️ [BrickGrid] Unknown pattern {pattern}, using Standard");
+                generatedBricks = GenerateStandardPattern();
+                break;
+        }
+        
+        // Update grid state and log results
+        SetGridGenerated(generatedBricks);
+        System.TimeSpan generationTime = System.DateTime.Now - startTime;
+        
+        LogDebug($"✅ [BrickGrid] {pattern} pattern complete:");
+        LogDebug($"   • Generated bricks: {generatedBricks}");
+        LogDebug($"   • Generation time: {generationTime.TotalMilliseconds:F1}ms");
+    }
+    
+    /// <summary>
+    /// Generates classic Breakout brick wall formation with uniform rows and columns.
+    /// Creates traditional pattern with configurable brick type distribution per row.
+    /// </summary>
+    /// <returns>Number of bricks successfully generated</returns>
+    private int GenerateStandardPattern()
+    {
+        LogDebug("   • Executing Standard pattern algorithm...");
+        
+        int successfulBricks = 0;
+        
+        // Generate uniform grid with all positions filled
+        for (int row = 0; row < gridConfiguration.rows; row++)
+        {
+            for (int column = 0; column < gridConfiguration.columns; column++)
+            {
+                // Calculate position using existing positioning system
+                Vector3 brickPosition = CalculateGridPosition(row, column);
+                
+                // Determine brick type for this position
+                BrickType brickType = GetBrickTypeForPosition(row, column, LayoutPattern.Standard);
+                
+                // Instantiate brick with hierarchy organization
+                GameObject brickInstance = InstantiateBrick(brickPosition, brickType, row, column);
+                if (brickInstance != null)
+                {
+                    successfulBricks++;
+                }
+            }
+        }
+        
+        LogDebug($"   • Standard pattern: {successfulBricks} bricks in {gridConfiguration.rows}×{gridConfiguration.columns} grid");
+        return successfulBricks;
+    }
+    
+    /// <summary>
+    /// Generates triangular formation starting wide at bottom and narrowing upward.
+    /// Creates challenging gameplay with focused destruction patterns.
+    /// </summary>
+    /// <returns>Number of bricks successfully generated</returns>
+    private int GeneratePyramidPattern()
+    {
+        LogDebug("   • Executing Pyramid pattern algorithm...");
+        
+        int successfulBricks = 0;
+        int totalRows = gridConfiguration.rows;
+        
+        for (int row = 0; row < totalRows; row++)
+        {
+            // Calculate pyramid reduction: fewer bricks per row as we go up
+            int bricksInRow = CalculatePyramidBricksInRow(row, totalRows, gridConfiguration.columns);
+            int startColumn = (gridConfiguration.columns - bricksInRow) / 2;
+            
+            for (int column = startColumn; column < startColumn + bricksInRow; column++)
+            {
+                if (ShouldPlaceBrickAtPosition(row, column, LayoutPattern.Pyramid))
+                {
+                    Vector3 brickPosition = CalculateGridPosition(row, column);
+                    BrickType brickType = GetBrickTypeForPosition(row, column, LayoutPattern.Pyramid);
+                    
+                    GameObject brickInstance = InstantiateBrick(brickPosition, brickType, row, column);
+                    if (brickInstance != null)
+                    {
+                        successfulBricks++;
+                    }
+                }
+            }
+        }
+        
+        LogDebug($"   • Pyramid pattern: {successfulBricks} bricks in triangular formation");
+        return successfulBricks;
+    }
+    
+    /// <summary>
+    /// Generates diamond/rhombus shape with symmetric layout.
+    /// Provides balanced destruction opportunities with optional hollow center.
+    /// </summary>
+    /// <returns>Number of bricks successfully generated</returns>
+    private int GenerateDiamondPattern()
+    {
+        LogDebug("   • Executing Diamond pattern algorithm...");
+        
+        int successfulBricks = 0;
+        int totalRows = gridConfiguration.rows;
+        int totalColumns = gridConfiguration.columns;
+        int midRow = totalRows / 2;
+        
+        for (int row = 0; row < totalRows; row++)
+        {
+            // Calculate diamond shape: expand from center, then contract
+            int bricksInRow = CalculateDiamondBricksInRow(row, totalRows, totalColumns);
+            int startColumn = (totalColumns - bricksInRow) / 2;
+            
+            for (int column = startColumn; column < startColumn + bricksInRow; column++)
+            {
+                if (ShouldPlaceBrickAtPosition(row, column, LayoutPattern.Diamond))
+                {
+                    // Skip hollow center if enabled
+                    if (hollowCenter && IsInDiamondCenter(row, column, totalRows, totalColumns))
+                    {
+                        continue;
+                    }
+                    
+                    Vector3 brickPosition = CalculateGridPosition(row, column);
+                    BrickType brickType = GetBrickTypeForPosition(row, column, LayoutPattern.Diamond);
+                    
+                    GameObject brickInstance = InstantiateBrick(brickPosition, brickType, row, column);
+                    if (brickInstance != null)
+                    {
+                        successfulBricks++;
+                    }
+                }
+            }
+        }
+        
+        LogDebug($"   • Diamond pattern: {successfulBricks} bricks in {(hollowCenter ? "hollow " : "")}diamond formation");
+        return successfulBricks;
+    }
+    
+    /// <summary>
+    /// Generates random placement with configurable density.
+    /// Includes playability validation to ensure balanced gameplay.
+    /// </summary>
+    /// <returns>Number of bricks successfully generated</returns>
+    private int GenerateRandomPattern()
+    {
+        LogDebug("   • Executing Random pattern algorithm...");
+        
+        int successfulBricks = 0;
+        float effectiveDensity = useGridDataPattern ? gridConfiguration.density : patternDensity;
+        
+        // Generate random placement with density control
+        for (int row = 0; row < gridConfiguration.rows; row++)
+        {
+            for (int column = 0; column < gridConfiguration.columns; column++)
+            {
+                // Use density to determine if brick should be placed
+                if (Random.value <= effectiveDensity)
+                {
+                    if (ShouldPlaceBrickAtPosition(row, column, LayoutPattern.Random))
+                    {
+                        Vector3 brickPosition = CalculateGridPosition(row, column);
+                        BrickType brickType = GetBrickTypeForPosition(row, column, LayoutPattern.Random);
+                        
+                        GameObject brickInstance = InstantiateBrick(brickPosition, brickType, row, column);
+                        if (brickInstance != null)
+                        {
+                            successfulBricks++;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Validate minimum brick count for playability
+        int minBricks = Mathf.Max(5, (gridConfiguration.rows * gridConfiguration.columns) / 10);
+        if (successfulBricks < minBricks)
+        {
+            LogWarning($"⚠️ [BrickGrid] Random pattern generated {successfulBricks} bricks (minimum: {minBricks})");
+            LogWarning("   • Consider increasing density or adjusting grid size for better gameplay");
+        }
+        
+        LogDebug($"   • Random pattern: {successfulBricks} bricks with {effectiveDensity:F1} density");
+        return successfulBricks;
+    }
+    
+    /// <summary>
+    /// Generates custom pattern based on GridData configuration.
+    /// Placeholder for user-defined patterns and specialized layouts.
+    /// </summary>
+    /// <returns>Number of bricks successfully generated</returns>
+    private int GenerateCustomPattern()
+    {
+        LogDebug("   • Executing Custom pattern algorithm...");
+        
+        // For now, fall back to standard pattern
+        LogWarning("⚠️ [BrickGrid] Custom pattern not implemented, using Standard pattern");
+        return GenerateStandardPattern();
+    }
+    
+    #endregion
+    
+    #region Pattern Utility Methods
+    
+    /// <summary>
+    /// Determines if a brick should be placed at the specified position for the given pattern.
+    /// Provides pattern-specific validation and placement logic.
+    /// </summary>
+    /// <param name="row">Row index</param>
+    /// <param name="column">Column index</param>
+    /// <param name="pattern">Layout pattern being generated</param>
+    /// <returns>True if brick should be placed at position</returns>
+    private bool ShouldPlaceBrickAtPosition(int row, int column, LayoutPattern pattern)
+    {
+        // Basic bounds checking
+        if (row < 0 || row >= gridConfiguration.rows || column < 0 || column >= gridConfiguration.columns)
+        {
+            return false;
+        }
+        
+        // Pattern-specific placement rules
+        switch (pattern)
+        {
+            case LayoutPattern.Standard:
+                return true; // All positions valid for standard pattern
+                
+            case LayoutPattern.Pyramid:
+                return IsValidPyramidPosition(row, column);
+                
+            case LayoutPattern.Diamond:
+                return IsValidDiamondPosition(row, column);
+                
+            case LayoutPattern.Random:
+                return ValidateRandomPlacement(row, column);
+                
+            case LayoutPattern.Custom:
+                return true; // Custom logic would go here
+                
+            default:
+                return true;
+        }
+    }
+    
+    /// <summary>
+    /// Determines appropriate brick type for position based on pattern and configuration.
+    /// Provides pattern-specific brick type distribution logic.
+    /// </summary>
+    /// <param name="row">Row index</param>
+    /// <param name="column">Column index</param>
+    /// <param name="pattern">Layout pattern being generated</param>
+    /// <returns>Brick type for this position</returns>
+    private BrickType GetBrickTypeForPosition(int row, int column, LayoutPattern pattern)
+    {
+        // Use GridData row-based type distribution if available
+        if (gridConfiguration.rowBrickTypes != null && gridConfiguration.rowBrickTypes.Length > row)
+        {
+            return gridConfiguration.rowBrickTypes[row];
+        }
+        
+        // Pattern-specific type distribution
+        switch (pattern)
+        {
+            case LayoutPattern.Standard:
+                return GetStandardPatternBrickType(row, column);
+                
+            case LayoutPattern.Pyramid:
+                return GetPyramidPatternBrickType(row, column);
+                
+            case LayoutPattern.Diamond:
+                return GetDiamondPatternBrickType(row, column);
+                
+            case LayoutPattern.Random:
+                return GetRandomPatternBrickType(row, column);
+                
+            default:
+                return BrickType.Normal;
+        }
+    }
+    
+    /// <summary>
+    /// Calculates number of bricks in a row for pyramid pattern.
+    /// </summary>
+    /// <param name="row">Current row index</param>
+    /// <param name="totalRows">Total number of rows</param>
+    /// <param name="maxColumns">Maximum columns available</param>
+    /// <returns>Number of bricks for this row</returns>
+    private int CalculatePyramidBricksInRow(int row, int totalRows, int maxColumns)
+    {
+        // Pyramid narrows from bottom to top
+        float reductionFactor = (float)row / totalRows;
+        int reduction = Mathf.FloorToInt(reductionFactor * maxColumns * 0.5f);
+        return Mathf.Max(1, maxColumns - reduction * 2);
+    }
+    
+    /// <summary>
+    /// Calculates number of bricks in a row for diamond pattern.
+    /// </summary>
+    /// <param name="row">Current row index</param>
+    /// <param name="totalRows">Total number of rows</param>
+    /// <param name="maxColumns">Maximum columns available</param>
+    /// <returns>Number of bricks for this row</returns>
+    private int CalculateDiamondBricksInRow(int row, int totalRows, int maxColumns)
+    {
+        int midRow = totalRows / 2;
+        int distanceFromCenter = Mathf.Abs(row - midRow);
+        float expansionFactor = 1.0f - ((float)distanceFromCenter / midRow);
+        return Mathf.Max(1, Mathf.FloorToInt(maxColumns * expansionFactor));
+    }
+    
+    /// <summary>
+    /// Determines if position is in the hollow center of a diamond pattern.
+    /// </summary>
+    /// <param name="row">Row index</param>
+    /// <param name="column">Column index</param>
+    /// <param name="totalRows">Total rows in grid</param>
+    /// <param name="totalColumns">Total columns in grid</param>
+    /// <returns>True if position is in hollow center</returns>
+    private bool IsInDiamondCenter(int row, int column, int totalRows, int totalColumns)
+    {
+        int midRow = totalRows / 2;
+        int midColumn = totalColumns / 2;
+        
+        // Define center area as 25% of diamond size
+        int centerRadiusRow = Mathf.Max(1, totalRows / 4);
+        int centerRadiusColumn = Mathf.Max(1, totalColumns / 4);
+        
+        return Mathf.Abs(row - midRow) <= centerRadiusRow && 
+               Mathf.Abs(column - midColumn) <= centerRadiusColumn;
+    }
+    
+    /// <summary>
+    /// Validates if position is valid for pyramid pattern.
+    /// </summary>
+    /// <param name="row">Row index</param>
+    /// <param name="column">Column index</param>
+    /// <returns>True if position is valid for pyramid</returns>
+    private bool IsValidPyramidPosition(int row, int column)
+    {
+        int bricksInRow = CalculatePyramidBricksInRow(row, gridConfiguration.rows, gridConfiguration.columns);
+        int startColumn = (gridConfiguration.columns - bricksInRow) / 2;
+        return column >= startColumn && column < startColumn + bricksInRow;
+    }
+    
+    /// <summary>
+    /// Validates if position is valid for diamond pattern.
+    /// </summary>
+    /// <param name="row">Row index</param>
+    /// <param name="column">Column index</param>
+    /// <returns>True if position is valid for diamond</returns>
+    private bool IsValidDiamondPosition(int row, int column)
+    {
+        int bricksInRow = CalculateDiamondBricksInRow(row, gridConfiguration.rows, gridConfiguration.columns);
+        int startColumn = (gridConfiguration.columns - bricksInRow) / 2;
+        return column >= startColumn && column < startColumn + bricksInRow;
+    }
+    
+    /// <summary>
+    /// Validates random placement to ensure balanced distribution.
+    /// </summary>
+    /// <param name="row">Row index</param>
+    /// <param name="column">Column index</param>
+    /// <returns>True if position passes validation</returns>
+    private bool ValidateRandomPlacement(int row, int column)
+    {
+        // Basic validation - could be enhanced with cluster prevention
+        return true;
+    }
+    
+    /// <summary>
+    /// Gets brick type for standard pattern positions.
+    /// </summary>
+    /// <param name="row">Row index</param>
+    /// <param name="column">Column index</param>
+    /// <returns>Appropriate brick type</returns>
+    private BrickType GetStandardPatternBrickType(int row, int column)
+    {
+        // Standard pattern: varied types based on row position
+        if (row < gridConfiguration.rows * 0.3f) return BrickType.Normal;
+        if (row < gridConfiguration.rows * 0.7f) return BrickType.Reinforced;
+        return BrickType.PowerUp;
+    }
+    
+    /// <summary>
+    /// Gets brick type for pyramid pattern positions.
+    /// </summary>
+    /// <param name="row">Row index</param>
+    /// <param name="column">Column index</param>
+    /// <returns>Appropriate brick type</returns>
+    private BrickType GetPyramidPatternBrickType(int row, int column)
+    {
+        // Pyramid: stronger bricks at the top (harder to reach)
+        float rowRatio = (float)row / gridConfiguration.rows;
+        if (rowRatio > 0.8f) return BrickType.PowerUp;
+        if (rowRatio > 0.5f) return BrickType.Reinforced;
+        return BrickType.Normal;
+    }
+    
+    /// <summary>
+    /// Gets brick type for diamond pattern positions.
+    /// </summary>
+    /// <param name="row">Row index</param>
+    /// <param name="column">Column index</param>
+    /// <returns>Appropriate brick type</returns>
+    private BrickType GetDiamondPatternBrickType(int row, int column)
+    {
+        // Diamond: special bricks at edges, normal in center
+        int midRow = gridConfiguration.rows / 2;
+        int midColumn = gridConfiguration.columns / 2;
+        float distanceFromCenter = Vector2.Distance(new Vector2(row, column), new Vector2(midRow, midColumn));
+        float maxDistance = Vector2.Distance(Vector2.zero, new Vector2(midRow, midColumn));
+        float edgeRatio = distanceFromCenter / maxDistance;
+        
+        if (edgeRatio > 0.8f) return BrickType.PowerUp;
+        if (edgeRatio > 0.5f) return BrickType.Reinforced;
+        return BrickType.Normal;
+    }
+    
+    /// <summary>
+    /// Gets brick type for random pattern positions.
+    /// </summary>
+    /// <param name="row">Row index</param>
+    /// <param name="column">Column index</param>
+    /// <returns>Appropriate brick type</returns>
+    private BrickType GetRandomPatternBrickType(int row, int column)
+    {
+        // Random distribution with weighted probabilities
+        float rand = Random.value;
+        if (rand < 0.1f) return BrickType.PowerUp;
+        if (rand < 0.3f) return BrickType.Reinforced;
+        if (rand < 0.05f) return BrickType.Indestructible;
+        return BrickType.Normal;
     }
     
     #endregion

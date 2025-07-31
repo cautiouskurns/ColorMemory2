@@ -257,11 +257,29 @@ public class PaddleController : MonoBehaviour
             paddleData = new PaddleData();
             paddleData.Initialize();
         }
-        
-        // Validate PaddleData parameters
-        if (!paddleData.ValidateParameters())
+        else
         {
-            Debug.LogWarning("[PaddleController] PaddleData contains invalid parameters. Using corrected values.");
+            Debug.Log("[PaddleController] Using existing PaddleData configuration from Inspector.");
+            Debug.Log($"[PaddleController] Inspector values - Speed: {paddleData.movementSpeed}, Acceleration: {paddleData.acceleration}");
+            // Don't call Initialize() - it would override Inspector values
+            // Just validate parameters without resetting state  
+        }
+        
+        // Validate PaddleData parameters - use different method based on source
+        bool parametersValid = false;
+        if (paddleData == null)
+        {
+            Debug.LogError("[PaddleController] PaddleData is null after validation attempt!");
+            setupValid = false;
+        }
+        else
+        {
+            // For Inspector-configured data, use validation that preserves settings
+            parametersValid = paddleData.ValidateExistingConfiguration();
+            if (!parametersValid)
+            {
+                Debug.LogWarning("[PaddleController] PaddleData contains invalid parameters. Using corrected values.");
+            }
         }
         
         // Initialize boundary constraints
@@ -286,6 +304,9 @@ public class PaddleController : MonoBehaviour
     {
         Debug.Log("[PaddleController] Initializing paddle state...");
         
+        // Apply paddle dimensions to visual size
+        ApplyPaddleDimensions();
+        
         // Set initial position to center of playable area
         float centerX = paddleData.GetCenterPosition();
         Vector3 initialPosition = new Vector3(centerX, paddleTransform.position.y, paddleTransform.position.z);
@@ -299,6 +320,158 @@ public class PaddleController : MonoBehaviour
         isMoving = false;
         
         Debug.Log($"[PaddleController] Paddle state initialized at position: {initialPosition}");
+    }
+    
+    #endregion
+    
+    #region Visual Size Management
+    
+    /// <summary>
+    /// Apply PaddleData dimensions to the paddle's visual representation.
+    /// Updates Transform scale and collider size to match configured dimensions.
+    /// </summary>
+    private void ApplyPaddleDimensions()
+    {
+        if (paddleData == null || paddleTransform == null)
+        {
+            Debug.LogWarning("[PaddleController] Cannot apply dimensions - components not available");
+            return;
+        }
+        
+        Vector2 targetDimensions = paddleData.paddleDimensions;
+        Debug.Log($"[PaddleController] Applying paddle dimensions: {targetDimensions.x:F2} x {targetDimensions.y:F2}");
+        
+        // Method 1: Scale the transform (works for most cases)
+        ApplyScaleBasedDimensions(targetDimensions);
+        
+        // Method 2: Update collider size directly (ensures accurate collision)
+        UpdateColliderDimensions(targetDimensions);
+        
+        // Recalculate paddle half-width for boundary calculations
+        CalculatePaddleHalfWidth();
+        
+        // Force boundary recalculation with new paddle size
+        InitializeBoundaryConstraints();
+        
+        Debug.Log($"[PaddleController] Paddle dimensions applied successfully");
+    }
+    
+    /// <summary>
+    /// Apply dimensions by scaling the Transform (affects visual and collider).
+    /// </summary>
+    /// <param name="targetDimensions">Target width and height</param>
+    private void ApplyScaleBasedDimensions(Vector2 targetDimensions)
+    {
+        // Get the original size from the sprite or collider
+        Vector2 originalSize = GetOriginalPaddleSize();
+        
+        if (originalSize.x <= 0 || originalSize.y <= 0)
+        {
+            Debug.LogWarning("[PaddleController] Cannot determine original paddle size for scaling");
+            return;
+        }
+        
+        // Calculate scale factors
+        float scaleX = targetDimensions.x / originalSize.x;
+        float scaleY = targetDimensions.y / originalSize.y;
+        
+        // Apply scale to transform
+        Vector3 newScale = new Vector3(scaleX, scaleY, paddleTransform.localScale.z);
+        paddleTransform.localScale = newScale;
+        
+        Debug.Log($"[PaddleController] Transform scaled to: {newScale} (factors: {scaleX:F2}x, {scaleY:F2}x)");
+    }
+    
+    /// <summary>
+    /// Update collider dimensions directly to ensure accurate collision detection.
+    /// </summary>
+    /// <param name="targetDimensions">Target width and height</param>
+    private void UpdateColliderDimensions(Vector2 targetDimensions)
+    {
+        if (paddleCollider != null)
+        {
+            paddleCollider.size = targetDimensions;
+            Debug.Log($"[PaddleController] Collider size updated to: {targetDimensions}");
+        }
+        else
+        {
+            Debug.LogWarning("[PaddleController] No collider available for size update");
+        }
+    }
+    
+    /// <summary>
+    /// Get the original size of the paddle from sprite or collider.
+    /// </summary>
+    /// <returns>Original paddle dimensions</returns>
+    private Vector2 GetOriginalPaddleSize()
+    {
+        // Try to get size from SpriteRenderer first
+        if (paddleRenderer != null && paddleRenderer.sprite != null)
+        {
+            Sprite sprite = paddleRenderer.sprite;
+            Vector2 spriteSize = new Vector2(
+                sprite.bounds.size.x,
+                sprite.bounds.size.y
+            );
+            Debug.Log($"[PaddleController] Original sprite size: {spriteSize}");
+            return spriteSize;
+        }
+        
+        // Fallback to collider size
+        if (paddleCollider != null)
+        {
+            Vector2 colliderSize = paddleCollider.size;
+            Debug.Log($"[PaddleController] Original collider size: {colliderSize}");
+            return colliderSize;
+        }
+        
+        // Emergency fallback - use current PaddleData dimensions
+        Debug.LogWarning("[PaddleController] Cannot determine original size - using current PaddleData dimensions");
+        return paddleData.paddleDimensions;
+    }
+    
+    /// <summary>
+    /// Public method to update paddle size at runtime.
+    /// </summary>
+    /// <param name="newDimensions">New paddle dimensions (width, height)</param>
+    public void SetPaddleDimensions(Vector2 newDimensions)
+    {
+        if (paddleData == null)
+        {
+            Debug.LogError("[PaddleController] Cannot set dimensions - no PaddleData available");
+            return;
+        }
+        
+        if (newDimensions.x <= 0f || newDimensions.y <= 0f)
+        {
+            Debug.LogError("[PaddleController] Invalid dimensions - width and height must be greater than 0");
+            return;
+        }
+        
+        Debug.Log($"[PaddleController] Setting paddle dimensions from {paddleData.paddleDimensions} to {newDimensions}");
+        
+        // Update PaddleData
+        paddleData.paddleDimensions = newDimensions;
+        
+        // Apply the visual changes
+        ApplyPaddleDimensions();
+        
+        // Validate that the paddle still fits within boundaries
+        if (!IsWithinBoundaries())
+        {
+            Debug.LogWarning("[PaddleController] Paddle size change caused it to exceed boundaries - adjusting position");
+            float centerX = paddleData.GetCenterPosition();
+            SetPosition(centerX);
+        }
+    }
+    
+    /// <summary>
+    /// Get current paddle dimensions from PaddleData.
+    /// </summary>
+    /// <returns>Current paddle dimensions</returns>
+    public Vector2 GetPaddleDimensions()
+    {
+        return paddleData != null ? paddleData.paddleDimensions : Vector2.zero;
     }
     
     #endregion
