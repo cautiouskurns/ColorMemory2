@@ -1,0 +1,12 @@
+{
+    "asset": "7bfbcf7845b5448a09d55df34e0aaf3d",
+    "fileName": "01986164-42cc-74bb-8931-bf5ff11894fb.wav",
+    "prompt": "A block being destroyed after beng hit by a bal in a game like Breakout",
+    "negativePrompt": "",
+    "model": "0ee39b33-2893-4e0f-8c46-0e0bdd4eda85",
+    "customSeed": -1,
+    "w3CTraceId": "e6d925c4c4ec0726b78e6219bf7ef991",
+    "duration": 10.0,
+    "autoTrim": false,
+    "hasReference": false
+}

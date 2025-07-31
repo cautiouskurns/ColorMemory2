@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 /// <summary>
 /// Core MonoBehaviour component for individual brick behavior and state management.
@@ -96,6 +97,27 @@ public class Brick : MonoBehaviour
     [Tooltip("Enable visual effects debug logging")]
     [SerializeField] private bool enableEffectsLogging = false;
     
+    [Header("Audio Effects")]
+    [Tooltip("AudioSource component for destruction sound effects (auto-configured if missing)")]
+    [SerializeField] private AudioSource audioSource;
+    
+    [Tooltip("Default destruction sound clip")]
+    [SerializeField] private AudioClip destructionSound;
+    
+    [Tooltip("Pitch variation range for audio variety (±range)")]
+    [Range(0.0f, 0.5f)]
+    [SerializeField] private float pitchVariation = 0.2f;
+    
+    [Tooltip("Volume multiplier for destruction sounds")]
+    [Range(0.1f, 2.0f)]
+    [SerializeField] private float volumeMultiplier = 1.0f;
+    
+    [Tooltip("Enable audio effects on destruction")]
+    [SerializeField] private bool enableAudioEffects = true;
+    
+    [Tooltip("Enable audio effects debug logging")]
+    [SerializeField] private bool enableAudioLogging = false;
+    
     #endregion
     
     #region Private Fields
@@ -124,6 +146,11 @@ public class Brick : MonoBehaviour
     private bool visualEffectsInitialized = false;
     private bool effectsTriggered = false;
     private ParticleSystem.EmitParams particleEmitParams;
+    
+    // Audio effects tracking
+    private bool audioSystemInitialized = false;
+    private Dictionary<BrickType, AudioClip> typeSpecificSounds;
+    private bool audioTriggered = false;
     
     #endregion
     
@@ -226,6 +253,21 @@ public class Brick : MonoBehaviour
     /// </summary>
     public ParticleSystem DestructionParticles => destructionParticles;
     
+    /// <summary>
+    /// Gets whether audio effects system has been initialized
+    /// </summary>
+    public bool AudioSystemInitialized => audioSystemInitialized;
+    
+    /// <summary>
+    /// Gets whether destruction audio has been triggered
+    /// </summary>
+    public bool AudioTriggered => audioTriggered;
+    
+    /// <summary>
+    /// Gets the AudioSource component for destruction sounds
+    /// </summary>
+    public AudioSource DestructionAudioSource => audioSource;
+    
     #endregion
     
     #region Unity Lifecycle
@@ -273,6 +315,9 @@ public class Brick : MonoBehaviour
         
         // Initialize visual effects system
         InitializeVisualEffectsSystem();
+        
+        // Initialize audio effects system
+        InitializeAudioEffectsSystem();
         
         startCompleted = true;
         LogDebug("[Brick] Start() completed successfully");
@@ -699,6 +744,9 @@ public class Brick : MonoBehaviour
         {
             // Trigger visual effects before cleanup
             TriggerDestructionEffects();
+            
+            // Trigger audio effects immediately
+            TriggerDestructionAudio();
             
             // Notify destruction systems before cleanup
             NotifyDestructionSystems();
@@ -1334,6 +1382,230 @@ public class Brick : MonoBehaviour
         catch (System.Exception e)
         {
             LogError($"[Brick] Error during particle effects cleanup: {e.Message}");
+        }
+    }
+    
+    #endregion
+    
+    #region Audio Effects System
+    
+    /// <summary>
+    /// Initializes the audio effects system and configures AudioSource
+    /// </summary>
+    private void InitializeAudioEffectsSystem()
+    {
+        LogAudioDebug("[Brick] Initializing audio effects system...");
+        
+        try
+        {
+            // Find or validate AudioSource component
+            if (audioSource == null)
+            {
+                audioSource = GetComponent<AudioSource>();
+                if (audioSource == null)
+                {
+                    LogAudioDebug("[Brick] No AudioSource found - audio effects will be skipped");
+                    audioSystemInitialized = false;
+                    return;
+                }
+            }
+            
+            // Configure AudioSource for 2D game audio
+            ConfigureAudioSource();
+            
+            // Initialize type-specific sound dictionary
+            InitializeTypeSpecificSounds();
+            
+            audioSystemInitialized = true;
+            LogAudioDebug("[Brick] Audio effects system initialized successfully");
+        }
+        catch (System.Exception e)
+        {
+            LogError($"[Brick] Failed to initialize audio effects system: {e.Message}");
+            audioSystemInitialized = false;
+        }
+    }
+    
+    /// <summary>
+    /// Configures AudioSource component with optimal settings for 2D destruction effects
+    /// </summary>
+    private void ConfigureAudioSource()
+    {
+        if (audioSource == null) return;
+        
+        LogAudioDebug("[Brick] Configuring AudioSource for destruction effects...");
+        
+        // Configure for 2D audio
+        audioSource.spatialBlend = 0f; // 2D audio
+        audioSource.playOnAwake = false;
+        audioSource.loop = false;
+        
+        // Set volume and pitch
+        audioSource.volume = volumeMultiplier;
+        audioSource.pitch = 1.0f; // Will be randomized per sound
+        
+        // Set priority for destruction sounds
+        audioSource.priority = 128; // Default priority
+        
+        LogAudioDebug($"[Brick] AudioSource configured - Volume: {audioSource.volume}, Spatial: {audioSource.spatialBlend}");
+    }
+    
+    /// <summary>
+    /// Initializes dictionary of type-specific sound effects
+    /// </summary>
+    private void InitializeTypeSpecificSounds()
+    {
+        typeSpecificSounds = new Dictionary<BrickType, AudioClip>();
+        
+        // For now, use the default destruction sound for all types
+        // This will be enhanced by the Editor setup script
+        if (destructionSound != null)
+        {
+            typeSpecificSounds[BrickType.Normal] = destructionSound;
+            typeSpecificSounds[BrickType.Reinforced] = destructionSound;
+            typeSpecificSounds[BrickType.PowerUp] = destructionSound;
+            typeSpecificSounds[BrickType.Indestructible] = destructionSound;
+        }
+        
+        LogAudioDebug($"[Brick] Type-specific sounds initialized with {typeSpecificSounds.Count} entries");
+    }
+    
+    /// <summary>
+    /// Triggers destruction audio effects when brick is destroyed
+    /// </summary>
+    private void TriggerDestructionAudio()
+    {
+        if (!enableAudioEffects)
+        {
+            LogAudioDebug("[Brick] Audio effects disabled - skipping audio");
+            return;
+        }
+        
+        if (!audioSystemInitialized)
+        {
+            LogAudioDebug("[Brick] Audio system not initialized - attempting to initialize now...");
+            InitializeAudioEffectsSystem();
+        }
+        
+        if (audioTriggered)
+        {
+            LogAudioDebug("[Brick] Destruction audio already triggered - skipping duplicate playback");
+            return;
+        }
+        
+        LogAudioDebug("[Brick] Triggering destruction audio effects...");
+        
+        try
+        {
+            // Configure and play destruction sound
+            ConfigureAudioPlayback();
+            PlayDestructionSound();
+            
+            // Mark audio as triggered to prevent duplicates
+            audioTriggered = true;
+            
+            LogAudioDebug("[Brick] Destruction audio effects triggered successfully");
+        }
+        catch (System.Exception e)
+        {
+            LogError($"[Brick] Failed to trigger destruction audio: {e.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// Configures audio playback parameters with pitch variation
+    /// </summary>
+    private void ConfigureAudioPlayback()
+    {
+        if (audioSource == null) return;
+        
+        // Apply pitch variation for audio variety
+        float pitchOffset = Random.Range(-pitchVariation, pitchVariation);
+        audioSource.pitch = 1.0f + pitchOffset;
+        
+        // Apply volume multiplier
+        audioSource.volume = volumeMultiplier;
+        
+        LogAudioDebug($"[Brick] Audio configured - Pitch: {audioSource.pitch:F2}, Volume: {audioSource.volume:F2}");
+    }
+    
+    /// <summary>
+    /// Plays the appropriate destruction sound for the brick type
+    /// </summary>
+    private void PlayDestructionSound()
+    {
+        if (audioSource == null)
+        {
+            LogAudioDebug("[Brick] No AudioSource available for sound playback");
+            return;
+        }
+        
+        // Get the appropriate sound clip for this brick type
+        AudioClip soundClip = GetSoundForBrickType();
+        
+        if (soundClip == null)
+        {
+            LogAudioDebug($"[Brick] No sound clip available for {currentBrickType} brick type");
+            return;
+        }
+        
+        // Use PlayOneShot to allow overlapping sounds during rapid destruction
+        audioSource.PlayOneShot(soundClip, volumeMultiplier);
+        
+        LogAudioDebug($"[Brick] Played destruction sound for {currentBrickType} brick - Clip: {soundClip.name}");
+    }
+    
+    /// <summary>
+    /// Gets the appropriate audio clip for the current brick type
+    /// </summary>
+    /// <returns>AudioClip for the brick type, or default sound if not found</returns>
+    private AudioClip GetSoundForBrickType()
+    {
+        if (brickData == null)
+        {
+            LogAudioDebug("[Brick] No BrickData available - using default destruction sound");
+            return destructionSound;
+        }
+        
+        // Try to get type-specific sound
+        if (typeSpecificSounds != null && typeSpecificSounds.TryGetValue(brickData.brickType, out AudioClip typeSound))
+        {
+            if (typeSound != null)
+            {
+                return typeSound;
+            }
+        }
+        
+        // Fallback to default destruction sound
+        LogAudioDebug($"[Brick] No specific sound for {brickData.brickType} - using default");
+        return destructionSound;
+    }
+    
+    /// <summary>
+    /// Sets a type-specific sound clip for a brick type
+    /// </summary>
+    /// <param name="brickType">Brick type to assign sound to</param>
+    /// <param name="audioClip">Audio clip to assign</param>
+    public void SetTypeSpecificSound(BrickType brickType, AudioClip audioClip)
+    {
+        if (typeSpecificSounds == null)
+        {
+            InitializeTypeSpecificSounds();
+        }
+        
+        typeSpecificSounds[brickType] = audioClip;
+        LogAudioDebug($"[Brick] Set type-specific sound for {brickType}: {(audioClip != null ? audioClip.name : "null")}");
+    }
+    
+    /// <summary>
+    /// Logs audio debug information if audio logging is enabled
+    /// </summary>
+    /// <param name="message">Debug message</param>
+    private void LogAudioDebug(string message)
+    {
+        if (enableAudioLogging)
+        {
+            Debug.Log(message);
         }
     }
     
