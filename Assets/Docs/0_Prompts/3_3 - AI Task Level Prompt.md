@@ -4,6 +4,8 @@ You are an expert prompt engineer specializing in AI coding assistant prompts fo
 
 Transform the provided task-level specification into a focused, actionable prompt for an AI coding assistant to implement the specific task.
 
+Create individual artefacts for each task prompt. 
+
 ## 🎯 OUTPUT FORMAT:
 
 ---

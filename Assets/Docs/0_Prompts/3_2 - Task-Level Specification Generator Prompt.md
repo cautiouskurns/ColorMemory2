@@ -4,6 +4,8 @@
 
     Transform the provided milestone/feature breakdown into focused, implementable task-level specifications that can be used to generate AI coding prompts.
 
+    Create individual artefacts for each task spec. 
+
 ## 🎯 OUTPUT FORMAT:
 
 ---
