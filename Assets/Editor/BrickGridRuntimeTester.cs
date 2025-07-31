@@ -111,6 +111,42 @@ public class BrickGridRuntimeTester : Editor
         
         EditorGUILayout.Space();
         
+        // Mathematical positioning testing
+        EditorGUILayout.LabelField("Position Mathematics", EditorStyles.boldLabel);
+        
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("Test Corner Positions"))
+        {
+            Debug.Log("🧮 [Inspector] Testing corner positions...");
+            if (brickGrid.GridConfiguration != null)
+            {
+                Vector3 bl = brickGrid.CalculateGridPosition(0, 0);
+                Vector3 br = brickGrid.CalculateGridPosition(0, brickGrid.GridConfiguration.columns - 1);
+                Vector3 tl = brickGrid.CalculateGridPosition(brickGrid.GridConfiguration.rows - 1, 0);
+                Vector3 tr = brickGrid.CalculateGridPosition(brickGrid.GridConfiguration.rows - 1, brickGrid.GridConfiguration.columns - 1);
+                
+                Debug.Log($"   • Bottom-Left: {bl}");
+                Debug.Log($"   • Bottom-Right: {br}");
+                Debug.Log($"   • Top-Left: {tl}");
+                Debug.Log($"   • Top-Right: {tr}");
+            }
+        }
+        
+        if (GUILayout.Button("Test Center & Bounds"))
+        {
+            Debug.Log("📐 [Inspector] Testing center and bounds...");
+            Vector3 center = brickGrid.CalculateGridCenter();
+            Bounds bounds = brickGrid.GetGridBounds();
+            bool valid = brickGrid.ValidateGridBounds();
+            
+            Debug.Log($"   • Grid Center: {center}");
+            Debug.Log($"   • Grid Bounds: {bounds}");
+            Debug.Log($"   • Bounds Valid: {valid}");
+        }
+        EditorGUILayout.EndHorizontal();
+        
+        EditorGUILayout.Space();
+        
         // Debug information
         EditorGUILayout.LabelField("Debug Information", EditorStyles.boldLabel);
         

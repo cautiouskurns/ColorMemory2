@@ -195,7 +195,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &442758385
 Transform:
   m_ObjectHideFlags: 0
@@ -329,7 +329,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_BackGroundColor: {r: 0, g: 0, b: 0, a: 0}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -5312,9 +5312,27 @@ MonoBehaviour:
   gridGenerated: 0
   brickCount: 0
   completionStatus: 0
-  gridContainer: {fileID: 0}
+  gridContainer: {fileID: 2118087175}
+  rowContainers:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  gridContainerName: BrickGrid
+  rowContainerPrefix: Row_
+  useRowOrganization: 1
+  brickPrefab: {fileID: 6907480581942103223, guid: 999b002e905cc43a5b329d4dc5d1d129, type: 3}
+  brickDataConfigurations: []
+  brickParent: {fileID: 0}
+  useBatchInstantiation: 1
+  maxBricksPerFrame: 25
   enableDebugLogging: 1
   showGridGizmos: 1
+  autoGenerateOnStart: 1
 --- !u!4 &574296871
 Transform:
   m_ObjectHideFlags: 0
@@ -5327,7 +5345,8 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 2118087176}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &619394800
@@ -27866,6 +27885,37 @@ BoxCollider2D:
   m_AutoTiling: 0
   m_Size: {x: 2, y: 0.3}
   m_EdgeRadius: 0
+--- !u!1 &2118087175
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2118087176}
+  m_Layer: 0
+  m_Name: BrickGrid
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2118087176
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2118087175}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 574296871}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!28 &2130324794
 Texture2D:
   m_ObjectHideFlags: 0
@@ -28140,11 +28190,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6207077716802387494, guid: f3c28cf5b950348d1bcc8a9d13bbfb52, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -2.93
+      value: -0.16
       objectReference: {fileID: 0}
     - target: {fileID: 6207077716802387494, guid: f3c28cf5b950348d1bcc8a9d13bbfb52, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 2.1
+      value: -2.24
       objectReference: {fileID: 0}
     - target: {fileID: 6207077716802387494, guid: f3c28cf5b950348d1bcc8a9d13bbfb52, type: 3}
       propertyPath: m_LocalPosition.z
@@ -28223,7 +28273,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ballData:
-    baseSpeed: 8
+    baseSpeed: 4
     minSpeed: 5
     maxSpeed: 15
     launchDirection: {x: 0.5, y: 1}
