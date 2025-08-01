@@ -1,4 +1,4 @@
-using UnityEngine;
+    using UnityEngine;
 
 /// <summary>
 /// Enumeration defining the types of boundary walls in the game area.
