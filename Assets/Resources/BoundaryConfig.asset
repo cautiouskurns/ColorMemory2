@@ -1,0 +1,87 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb73df1cc20ff4a41ad3c1fbbcb6fba0, type: 3}
+  m_Name: BoundaryConfig
+  m_EditorClassIdentifier: Assembly-CSharp::BoundaryConfig
+  enableBoundaries: 1
+  defaultPhysicsMaterial: {fileID: 0}
+  defaultVisualMaterial: {fileID: 0}
+  targetAspectRatio: 1.6
+  referenceResolution: {x: 1920, y: 1200}
+  boundaryMargin: 1
+  playAreaWidth: 20
+  playAreaHeight: 12
+  playAreaCenter: {x: 0, y: 0, z: 0}
+  enableResolutionScaling: 1
+  minimumScaleFactor: 0.5
+  maximumScaleFactor: 2
+  topBoundary:
+    boundaryType: 0
+    width: 22
+    height: 1
+    thickness: 1
+    positionOffset: {x: 0, y: 0, z: 0}
+    rotationOffset: {x: 0, y: 0, z: 0}
+    bounceCoefficient: 1
+    physicsMaterial: {fileID: 0}
+    enableCollision: 1
+    collisionLayer: 0
+    enableVisual: 1
+    visualColor: {r: 0.2, g: 0.4, b: 0.8, a: 1}
+    visualMaterial: {fileID: 0}
+  leftBoundary:
+    boundaryType: 1
+    width: 1
+    height: 14
+    thickness: 1
+    positionOffset: {x: 0, y: 0, z: 0}
+    rotationOffset: {x: 0, y: 0, z: 0}
+    bounceCoefficient: 1
+    physicsMaterial: {fileID: 0}
+    enableCollision: 1
+    collisionLayer: 0
+    enableVisual: 1
+    visualColor: {r: 0.2, g: 0.8, b: 0.4, a: 1}
+    visualMaterial: {fileID: 0}
+  rightBoundary:
+    boundaryType: 2
+    width: 1
+    height: 14
+    thickness: 1
+    positionOffset: {x: 0, y: 0, z: 0}
+    rotationOffset: {x: 0, y: 0, z: 0}
+    bounceCoefficient: 1
+    physicsMaterial: {fileID: 0}
+    enableCollision: 1
+    collisionLayer: 0
+    enableVisual: 1
+    visualColor: {r: 0.2, g: 0.8, b: 0.4, a: 1}
+    visualMaterial: {fileID: 0}
+  bottomBoundary:
+    boundaryType: 3
+    width: 22
+    height: 1
+    thickness: 1
+    positionOffset: {x: 0, y: 0, z: 0}
+    rotationOffset: {x: 0, y: 0, z: 0}
+    bounceCoefficient: 0
+    physicsMaterial: {fileID: 0}
+    enableCollision: 0
+    collisionLayer: 0
+    enableVisual: 1
+    visualColor: {r: 0.8, g: 0.2, b: 0.2, a: 1}
+    visualMaterial: {fileID: 0}
+  globalBounceMultiplier: 1
+  enablePhysicsDebugging: 0
+  showBoundaryGizmos: 1
+  enableBoundaryPooling: 0
+  collisionDetectionMode: 1
